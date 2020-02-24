@@ -45,7 +45,6 @@ complexd* generate_condition(int n){
 
 void OneQubitEvolution(complexd* V,complexd* W,complexd U[2][2],int n, int k){
     int shift = n-k;
-    //Все биты нулевые, кроме соответствующего позиции преобразуемого кубита
     int pow=1<<(shift);
 
     int N=1<<n;
