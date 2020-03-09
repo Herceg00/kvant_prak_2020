@@ -8,3 +8,7 @@ submit:
     			done \
     		done \
     	done
+testing:
+	g++ test.cpp -fopenmp -o test
+	./test 8 5 test8_5
+	./test 16 3 test16_3
