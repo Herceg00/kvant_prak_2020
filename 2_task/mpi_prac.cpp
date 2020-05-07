@@ -52,20 +52,15 @@ OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned
     printf("RANK %d has a change-neighbor %d\n", rank, rank_change);
 
     if (rank != rank_change) {
-        MPI_Sendrecv(buf_zone, seg_size, MPI_DOUBLE_COMPLEX, rank_change, 0, recv_zone, seg_size, MPI_DOUBLE_COMPLEX, rank_change, 0,
+        MPI_Sendrecv(buf_zone, seg_size, MPI_DOUBLE_COMPLEX, rank_change, 0, recv_zone, seg_size, MPI_DOUBLE_COMPLEX,
+                     rank_change, 0,
                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-//        for (int i = 0; i < seg_size; i++) {
-//            cout<<"RANK: "<<rank<<" index: "<<i<<" value: "<<recv_zone[i]<<endl;
-//        }
         if (rank > rank_change) { //Got data somewhere from left
             for (int i = 0; i < seg_size; i++) {
-                //cout<<"RANK: "<<rank<<" index: "<<i<<" value: "<<recv_zone[i]<<" "<<buf_zone[i]<<endl;
-
                 recv_zone[i] = U[1][0] * recv_zone[i] + U[1][1] * buf_zone[i];
             }
         } else {
             for (int i = 0; i < seg_size; i++) {
-                //cout<<"RANK: "<<rank<<" index: "<<i<<" value: "<<recv_zone[i]<<" "<<buf_zone[i]<<endl;
                 recv_zone[i] = U[0][0] * buf_zone[i] + U[0][1] * recv_zone[i];
             }
         }
@@ -92,25 +87,15 @@ int main(int argc, char **argv) {
     int k = atoi(argv[2]); // operated qubit number
     assert(n >= k);
     struct timeval start, stop;
-complexd *V = generate_condition(n);
-     unsigned long long index = 1LLU << n;
-complexd *W = new complexd[index];
-//    int *V = new int[index];
-//    int *W = new int[index];
-//    for (int i = 0; i < index; i++) {
-//        V[i] = i;
-//    }
+    complexd *V = generate_condition(n);
+    unsigned long long index = 1LLU << n;
+    complexd *W = new complexd[index];
     complexd U[2][2];
     U[0][0] = 1 / sqrt(2);
     U[0][1] = 1 / sqrt(2);
     U[1][0] = 1 / sqrt(2);
     U[1][1] = -1 / sqrt(2);
-//    int U[2][2];
-//    U[0][0] = 1;
-//    U[0][1] = 1;
-//    U[1][0] = 1;
-//    U[1][1] = 1;
-    
+
     MPI_Init(&argc, &argv);
     int rank;
     int size;
@@ -125,7 +110,7 @@ complexd *W = new complexd[index];
     OneQubitEvolution(buf_zone, U, n, k, recv_buf, rank, size);
     MPI_Gather(recv_buf, index / size, MPI_DOUBLE_COMPLEX, W, index / size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
     gettimeofday(&stop, NULL);
-    
+
     if (rank == 0) {
         for (int i = 0; i < index; i++) {
             cout << W[i] << endl;
