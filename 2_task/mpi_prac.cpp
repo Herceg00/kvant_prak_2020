@@ -19,25 +19,33 @@ complexd* generate_condition(int seg_size, int rank)
     complexd *A = new complexd[seg_size];
     double sqr = 0, module;
     unsigned int seed = time(nullptr) + rank;
-    for (std::size_t i = 0; i < seg_size; i++) {
-        A[i].real((rand_r(&seed) / (float) RAND_MAX) - 0.5f);
-        A[i].imag((rand_r(&seed) / (float) RAND_MAX) - 0.5f);
-        sqr += abs(A[i] * A[i]);
+#pragma omp parallel shared(A) reduction(+: sqr)
+    {
+#pragma omp for schedule(static)
+        for (std::size_t i = 0; i < seg_size; i++) {
+            A[i].real((rand_r(&seed) / (float) RAND_MAX) - 0.5f);
+            A[i].imag((rand_r(&seed) / (float) RAND_MAX) - 0.5f);
+            sqr += abs(A[i] * A[i]);
+        }
     }
     MPI_Reduce(&sqr, &module, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     if (rank == 0) {
         module = sqrt(module);
     }
     MPI_Bcast(&module, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+#pragma omp parallel shared(A,module)
+    {
+#pragma omp for schedule(static)
     for (std::size_t i = 0; i < seg_size; i++)
         A[i] /= module;
+    }
     return A;
 }
 
 void
 OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned int k, complexd *recv_zone, int rank,
                   int size) {
-
+//TODO fails on big vectors with small k
     unsigned N = 1u << n;
     unsigned seg_size = N / size;
     unsigned first_index = rank * seg_size;
@@ -51,12 +59,20 @@ OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned
                      rank_change, 0,
                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         if (rank > rank_change) { //Got data somewhere from left
-            for (int i = 0; i < seg_size; i++) {
-                recv_zone[i] = U[1][0] * recv_zone[i] + U[1][1] * buf_zone[i];
+#pragma omp parallel shared(recv_zone,buf_zone,U)
+            {
+#pragma omp for schedule(static)
+                for (int i = 0; i < seg_size; i++) {
+                    recv_zone[i] = U[1][0] * recv_zone[i] + U[1][1] * buf_zone[i];
+                }
             }
         } else {
-            for (int i = 0; i < seg_size; i++) {
-                recv_zone[i] = U[0][0] * buf_zone[i] + U[0][1] * recv_zone[i];
+#pragma omp parallel shared(recv_zone,buf_zone,U)
+            {
+#pragma omp for schedule(static)
+                for (int i = 0; i < seg_size; i++) {
+                    recv_zone[i] = U[0][0] * buf_zone[i] + U[0][1] * recv_zone[i];
+                }
             }
         }
     } else {
