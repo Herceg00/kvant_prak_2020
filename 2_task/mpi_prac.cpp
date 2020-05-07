@@ -14,30 +14,25 @@ using namespace std;
 
 typedef complex<double> complexd;
 
-
-complexd *generate_condition(int n) {
-    long long unsigned qsize = 1LLU << n; // pow(2,n) for a condition-vector
-    complexd *V = new complexd[qsize];
-    double time_init = time(NULL);
-    double module = 0;
-    {
-        unsigned int seed = omp_get_thread_num() * (unsigned) time_init;
-        for (long long unsigned i = 0; i < qsize; i++) {
-            V[i].real(rand_r(&seed) / (float) RAND_MAX - 0.5f);
-            V[i].imag(rand_r(&seed) / (float) RAND_MAX - 0.5f);
-            module += abs(V[i] * V[i]);
-        }
-        if (omp_get_thread_num() == 0) {
-            module = sqrt(module);
-        }
-#pragma omp for schedule(static)
-        for (long long unsigned j = 0; j < qsize; j++) {
-            V[j] /= module;
-        }
+complexd* generate_condition(int seg_size, int rank)
+{
+    complexd *A = new complexd[seg_size];
+    double sqr = 0, module;
+    unsigned int seed = time(nullptr) + rank;
+    for (std::size_t i = 0; i < seg_size; i++) {
+        A[i].real((rand_r(&seed) / (float) RAND_MAX) - 0.5f);
+        A[i].imag((rand_r(&seed) / (float) RAND_MAX) - 0.5f);
+        sqr += abs(A[i] * A[i]);
     }
-    return V;
+    MPI_Reduce(&sqr, &module, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    if (rank == 0) {
+        module = sqrt(module);
+    }
+    MPI_Bcast(&module, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    for (std::size_t i = 0; i < seg_size; i++)
+        A[i] /= module;
+    return A;
 }
-
 
 void
 OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned int k, complexd *recv_zone, int rank,
@@ -87,7 +82,7 @@ int main(int argc, char **argv) {
     int k = atoi(argv[2]); // operated qubit number
     assert(n >= k);
     struct timeval start, stop;
-    complexd *V = generate_condition(n);
+
     unsigned long long index = 1LLU << n;
     complexd *W = new complexd[index];
     complexd U[2][2];
@@ -101,16 +96,13 @@ int main(int argc, char **argv) {
     int size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    complexd *buf_zone = new complexd[index / size]; //TODO int div
-    complexd *recv_buf = new complexd[index / size];
-//    int *buf_zone = new int [index / size]; //TODO int div
-//    int *recv_buf = new int [index / size];
-    gettimeofday(&start, NULL);
-    MPI_Scatter(V, index / size, MPI_DOUBLE_COMPLEX, buf_zone, index / size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
-    OneQubitEvolution(buf_zone, U, n, k, recv_buf, rank, size);
-    MPI_Gather(recv_buf, index / size, MPI_DOUBLE_COMPLEX, W, index / size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
-    gettimeofday(&stop, NULL);
-
+    int seg_size = index/size;
+    complexd *recv_buf = new complexd[seg_size];
+    complexd *V = generate_condition(seg_size, rank);
+    gettimeofday(&start, nullptr);
+    OneQubitEvolution(V, U, n, k, recv_buf, rank, size);
+    MPI_Gather(recv_buf, seg_size, MPI_DOUBLE_COMPLEX, W, seg_size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+    gettimeofday(&stop, nullptr);
     if (rank == 0) {
         for (int i = 0; i < index; i++) {
             cout << W[i] << endl;
