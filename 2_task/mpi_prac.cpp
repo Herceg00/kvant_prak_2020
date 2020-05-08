@@ -45,7 +45,6 @@ complexd* generate_condition(int seg_size, int rank)
 void
 OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned int k, complexd *recv_zone, int rank,
                   int size) {
-//TODO fails on big vectors with small k
     unsigned N = 1u << n;
     unsigned seg_size = N / size;
     unsigned first_index = rank * seg_size;
@@ -76,13 +75,14 @@ OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned
             }
         }
     } else {
-        int shift = seg_size - k;
-        int pow = 1 << (shift);
+        cout<<"WAS THERE"<<endl;
+        unsigned shift = (int)log2(seg_size) - k;
+        unsigned pow = 1u << (shift);
 #pragma omp for schedule(static)
-        for (int i = 0; i < seg_size; i++) {
-            int i0 = i & ~pow;
-            int i1 = i | pow;
-            int iq = (i & pow) >> shift;
+        for (std::size_t i = 0; i < seg_size; i++) {
+            unsigned i0 = i & ~pow;
+            unsigned i1 = i | pow;
+            unsigned iq = (i & pow) >> shift;
             recv_zone[i] = U[iq][0] * buf_zone[i0] + U[iq][1] * buf_zone[i1];
         }
     }
