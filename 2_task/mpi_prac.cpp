@@ -6,7 +6,7 @@
 #include "sys/time.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "mpi/mpi.h"
+#include <mpi.h>
 
 using namespace std;
 
@@ -165,25 +165,25 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
         string option(argv[i]);
 
-        if (option.compare("-n") == 0) {
+        if (option.compare("n") == 0) {
             n = atoi(argv[++i]);
         }
 
-        if ((option.compare("-k") == 0)) {
+        if ((option.compare("k") == 0)) {
             k = atoi(argv[++i]);
         }
 
-        if ((option.compare("-file_read") == 0)) {
+        if ((option.compare("file_read") == 0)) {
             input = argv[++i];
             file_read = true;
         }
-        if ((option.compare("-file_write") == 0)) {
+        if ((option.compare("file_write") == 0)) {
             output = argv[++i];
         }
-        if ((option.compare("-test") == 0)) {
+        if ((option.compare("test") == 0)) {
             test_flag = true;
         }
-        if ((option.compare("-file_test") == 0)) {
+        if ((option.compare("file_test") == 0)) {
             test_file = argv[++i];
         }
     }
@@ -212,9 +212,11 @@ int main(int argc, char **argv) {
     U[1][1] = -1 / sqrt(2);
 
     auto *recv_buf = new complexd[seg_size];
-    gettimeofday(&start, nullptr);
+    double begin = MPI_Wtime();
+
     OneQubitEvolution(V, U, n, k, recv_buf, rank, size);
-    gettimeofday(&stop, nullptr);
+    double end = MPI_Wtime();
+    std::cout << "The process took " << end - begin << " seconds to run." << std::endl;
     if (test_flag) {
         complexd *test_vector = read(test_file, &n, rank, size);
         if (std::size_t pos = difference(test_vector, V, seg_size, rank) == 0) {
@@ -225,8 +227,9 @@ int main(int argc, char **argv) {
     } else {
         write(output, recv_buf, n, rank, size);
     }
+    MPI_Finalize();
     printf(" LIFETIME:%lf s ",
            (float) ((stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec) / 1000000);
     delete[] V;
-    MPI_Finalize();
+
 }
