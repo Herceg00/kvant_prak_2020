@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "mpi/mpi.h"
+
 #define eps 0.01
 using namespace std;
 
@@ -94,25 +95,6 @@ complexd *generate_condition(unsigned long long seg_size, int rank) {
 }
 
 
-double get_distance(complexd *ideal, complexd *noise, int rank, unsigned long long seg_size){
-    double sqr = 0;
-    double module;
-#pragma omp parallel shared(A) reduction(+: sqr)
-    {
-#pragma omp for schedule(static)
-        for (std::size_t i = 0; i < seg_size; i++) {
-            sqr += abs(ideal[i] * noise[i]);
-        }
-    }
-    MPI_Reduce(&sqr, &module, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, 0, MPI_COMM_WORLD);
-    if (rank == 0) {
-        module = sqrt(module);
-        return module;
-    } else {
-        return 0;
-    }
-}
-
 void
 OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned int k, complexd *recv_zone, int rank,
                   int size) {
@@ -176,11 +158,29 @@ std::size_t difference(complexd *ideal, complexd *count, unsigned long long seg_
     return error_position; //Last error position will be fixed
 }
 
+double get_distance(complexd *ideal, complexd *noise, int rank, unsigned long long seg_size) {
+    double sqr = 0;
+    double module;
+#pragma omp parallel shared(ideal,noise) reduction(+: sqr)
+    {
+#pragma omp for schedule(static)
+        for (std::size_t i = 0; i < seg_size; i++) {
+            sqr += abs(ideal[i] * noise[i]) * abs(ideal[i] * noise[i]);
+        }
+    }
+    MPI_Reduce(&sqr, &module, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, 0, MPI_COMM_WORLD);
+    if (rank == 0) {
+        return module;
+    } else {
+        return 0;
+    }
+}
+
 double normal_dis_gen() //generate a value
 {
     double S = 0.;
-    for (int i = 0; i<12; ++i) { S += (double)rand()/RAND_MAX; }
-    return S-6.0;
+    for (int i = 0; i < 12; ++i) { S += (double) rand() / RAND_MAX; }
+    return S - 6.0;
 }
 
 int main(int argc, char **argv) {
@@ -242,7 +242,9 @@ int main(int argc, char **argv) {
     double begin = MPI_Wtime();
 
     //simple evolution
-    OneQubitEvolution(V, U, n, k, recv_buf1, rank, size);
+    for (int qubit = 1; qubit < n + 1; qubit++) {
+        OneQubitEvolution(V, U, n, k, recv_buf1, rank, size);
+    }
 
     U[0][0] *= cos(thetta) - sin(thetta);
     U[0][1] *= sin(thetta) + cos(thetta);
@@ -250,8 +252,9 @@ int main(int argc, char **argv) {
     U[1][1] *= cos(thetta) - sin(thetta);
 
     //noise evolution
-    OneQubitEvolution(V, U, n, k, recv_buf2, rank, size);
-
+    for (int qubit = 1; qubit < n + 1; qubit++) {
+        OneQubitEvolution(V, U, n, k, recv_buf2, rank, size);
+    }
     double end = MPI_Wtime();
 
     std::cout << "The process took " << end - begin << " seconds to run." << std::endl;
@@ -263,7 +266,10 @@ int main(int argc, char **argv) {
             cout << "Error in " << pos << " position on segment number " << rank;
         }
     } else {
-        write(output, recv_buf1, n, rank, size);
+        double distance = get_distance(recv_buf1, recv_buf2, rank, seg_size);
+        if (!rank) {                                                  //only root has non-NULL value
+            cout << "distance is equal " << distance << endl;
+        }
     }
     MPI_Finalize();
     delete[] V;
