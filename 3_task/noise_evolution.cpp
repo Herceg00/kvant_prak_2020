@@ -20,10 +20,10 @@ double normal_dis_gen() //generate a value
 
 typedef complex<double> complexd;
 
-void make_noise(complexd U[2][2], complexd V[2][2], bool noise) {
+void make_noise(complexd U[2][2], complexd V[2][2], bool noise, double thetta) {
 
     if (noise) {
-        double thetta = normal_dis_gen() * eps;
+        //double thetta = normal_dis_gen() * eps;
         V[0][0] = U[0][0] * cos(thetta) - U[0][1] * sin(thetta);
         V[0][1] = U[0][0] * sin(thetta) + U[0][1] * cos(thetta);
         V[1][0] = U[1][0] * cos(thetta) - U[1][1] * sin(thetta);
@@ -130,7 +130,12 @@ OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned
 
     printf("RANK %d has a change-neighbor %d\n", rank, rank_change);
     complexd V[2][2];
-    make_noise(U, V, noise);
+    double thetta;
+    if (rank == 0){
+        thetta = normal_dis_gen();
+    }
+    MPI_Bcast(&thetta, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    make_noise(U, V, noise,thetta);
 
     if (rank != rank_change) {
         MPI_Sendrecv(buf_zone, seg_size, MPI_DOUBLE_COMPLEX, rank_change, 0, recv_zone, seg_size, MPI_DOUBLE_COMPLEX,
