@@ -130,11 +130,13 @@ OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned
 
     printf("RANK %d has a change-neighbor %d\n", rank, rank_change);
     complexd V[2][2];
-    double thetta;
-    if (rank == 0){
-        thetta = normal_dis_gen();
+    double thetta = 0;
+    if (noise) {
+        if (rank == 0) {
+            thetta = normal_dis_gen();
+        }
+        MPI_Bcast(&thetta, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     }
-    MPI_Bcast(&thetta, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     make_noise(U, V, noise,thetta);
 
     if (rank != rank_change) {
