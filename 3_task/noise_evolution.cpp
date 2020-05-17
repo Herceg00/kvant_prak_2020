@@ -20,21 +20,12 @@ double normal_dis_gen() //generate a value
 
 typedef complex<double> complexd;
 
-void make_noise(complexd U[2][2], complexd V[2][2], bool noise, double thetta) {
-
-    if (noise) {
-        //double thetta = normal_dis_gen() * eps;
-        V[0][0] = U[0][0] * cos(thetta) - U[0][1] * sin(thetta);
-        V[0][1] = U[0][0] * sin(thetta) + U[0][1] * cos(thetta);
-        V[1][0] = U[1][0] * cos(thetta) - U[1][1] * sin(thetta);
-        V[1][1] = U[1][0] * sin(thetta) + U[1][1] * cos(thetta);
-    } else {
-        V[0][0] = U[0][0];
-        V[0][1] = U[0][1];
-        V[1][0] = U[1][0];
-        V[1][1] = U[1][1];
-
-    }
+void make_noise(complexd U[2][2], complexd V[2][2], double thetta) {
+    //double thetta = normal_dis_gen() * eps;
+    V[0][0] = U[0][0] * cos(thetta) - U[0][1] * sin(thetta);
+    V[0][1] = U[0][0] * sin(thetta) + U[0][1] * cos(thetta);
+    V[1][0] = U[1][0] * cos(thetta) - U[1][1] * sin(thetta);
+    V[1][1] = U[1][0] * sin(thetta) + U[1][1] * cos(thetta);
 }
 
 complexd *read(char *f, unsigned int *n, int rank, int size) {
@@ -121,7 +112,7 @@ complexd *generate_condition(unsigned long long seg_size, int rank) {
 
 void
 OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned int k, complexd *recv_zone, int rank,
-                  int size, bool noise) {
+                  int size) {
     unsigned N = 1u << n;
     unsigned seg_size = N / size;
     unsigned first_index = rank * seg_size;
@@ -129,48 +120,38 @@ OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned
     rank_change /= seg_size;
 
     printf("RANK %d has a change-neighbor %d\n", rank, rank_change);
-    complexd V[2][2];
-    double thetta = 0;
-    if (noise) {
-        if (rank == 0) {
-            thetta = normal_dis_gen();
-        }
-        MPI_Bcast(&thetta, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    }
-    make_noise(U, V, noise,thetta);
-
     if (rank != rank_change) {
         MPI_Sendrecv(buf_zone, seg_size, MPI_DOUBLE_COMPLEX, rank_change, 0, recv_zone, seg_size, MPI_DOUBLE_COMPLEX,
                      rank_change, 0,
                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         if (rank > rank_change) { //Got data somewhere from left
-#pragma omp parallel shared(recv_zone, buf_zone, V)
+#pragma omp parallel shared(recv_zone, buf_zone, U)
             {
 #pragma omp for schedule(static)
                 for (int i = 0; i < seg_size; i++) {
-                    recv_zone[i] = V[1][0] * recv_zone[i] + V[1][1] * buf_zone[i];
+                    recv_zone[i] = U[1][0] * recv_zone[i] + U[1][1] * buf_zone[i];
                 }
             }
         } else {
-#pragma omp parallel shared(recv_zone, buf_zone, V)
+#pragma omp parallel shared(recv_zone, buf_zone, U)
             {
 #pragma omp for schedule(static)
                 for (int i = 0; i < seg_size; i++) {
-                    recv_zone[i] = V[0][0] * buf_zone[i] + V[0][1] * recv_zone[i];
+                    recv_zone[i] = U[0][0] * buf_zone[i] + U[0][1] * recv_zone[i];
                 }
             }
         }
     } else {
         unsigned shift = (int) log2(seg_size) - k;
         unsigned pow = 1u << (shift);
-#pragma omp parallel shared(recv_zone, buf_zone, V)
+#pragma omp parallel shared(recv_zone, buf_zone, U)
         {
 #pragma omp for schedule(static)
             for (std::size_t i = 0; i < seg_size; i++) {
                 unsigned i0 = i & ~pow;
                 unsigned i1 = i | pow;
                 unsigned iq = (i & pow) >> shift;
-                recv_zone[i] = V[iq][0] * buf_zone[i0] + V[iq][1] * buf_zone[i1];
+                recv_zone[i] = U[iq][0] * buf_zone[i0] + U[iq][1] * buf_zone[i1];
             }
         }
     }
@@ -197,7 +178,7 @@ double get_distance(complexd *ideal, complexd *noise, int rank, unsigned long lo
     {
 #pragma omp for schedule(static)
         for (std::size_t i = 0; i < seg_size; i++) {
-            sqr += abs(ideal[i] * noise[i]) * abs(ideal[i] * noise[i]);
+            sqr += abs(ideal[i] * conj(noise[i])) * abs(ideal[i] * conj(noise[i]));
         }
     }
     MPI_Reduce(&sqr, &module, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -269,17 +250,31 @@ int main(int argc, char **argv) {
 
     //simple evolution
     for (int qubit = 1; qubit < n + 1; qubit++) {
-        OneQubitEvolution(V, U, n, k, recv_buf1, rank, size, false);
-    }
-
-
-    //noise evolution
-    for (int qubit = 1; qubit < n + 1; qubit++) {
-        OneQubitEvolution(V, U, n, k, recv_buf2, rank, size, true);
+        OneQubitEvolution(V, U, n, k, recv_buf1, rank, size);
     }
     double end = MPI_Wtime();
 
-    std::cout << "The process took " << end - begin << " seconds to run." << std::endl;
+    std::cout << "Clear evolution took " << end - begin << " seconds to run." << std::endl;
+
+    double time_to_noise_evolution = 0;
+
+    //noise evolution
+    for (int qubit = 1; qubit < n + 1; qubit++) {
+        complexd U_noised[2][2];
+        double thetta = 0;
+        if (rank == 0) {
+            thetta = normal_dis_gen();
+        }
+        MPI_Bcast(&thetta, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        make_noise(U, U_noised, thetta);
+        begin = MPI_Wtime();
+        OneQubitEvolution(V, U_noised, n, k, recv_buf2, rank, size);
+        end = MPI_Wtime();
+        time_to_noise_evolution += end - begin;
+    }
+
+    std::cout << "Noise evolution took  " << time_to_noise_evolution << " seconds to run." << std::endl;
+
     if (test_flag) {
         complexd *test_vector = read(test_file, &n, rank, size);
         if (std::size_t pos = difference(test_vector, V, seg_size, rank) == 0) {
