@@ -69,7 +69,7 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
     rank1_change /= seg_size;
     rank2_change /= seg_size;
     rank3_change /= seg_size;
-    //The case when we don't need to change data
+    //The case when we don't need to change data - ранк противоположного процесса равен собственному
     if (rank == rank3_change) {
 #pragma omp parallel shared(recv_zone, buf_zone, U)
         {
@@ -109,7 +109,7 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
         }
         //The case when one array should be get from other process
     } else if ((rank == rank1_change) || (rank == rank2_change)) {
-        if(k>l) {
+        if (k>l) {
             MPI_Sendrecv(buf0, seg_size, MPI_DOUBLE_COMPLEX, rank1_change, 0, buf1, seg_size,
                          MPI_DOUBLE_COMPLEX,
                          rank1_change, 0,
@@ -179,7 +179,7 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
                             buf0[i] = U[0][1]*buf1[i] + U[1][1]*buf0[i] + U[2][1]*buf1[k_pair] + U[3][1]*buf0[k_pair];
                         } else { //11
                             char k_pair = i^(1<<(k-1));
-                            buf0[i] = U[0][3]*buf1[k_pair] + U[1][3]*buf0[k_pair] + U[2][3]*buf1[i] + U[3][3]*buf1[i];
+                            buf0[i] = U[0][3]*buf1[k_pair] + U[1][3]*buf0[k_pair] + U[2][3]*buf1[i] + U[3][3]*buf0[i];
                         }
                     }
                 }
@@ -187,19 +187,17 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
         }
         //The case when we should gather data from all processes
     } else {
-        short l_local = rank*seg_size>>l; //k and l are identical for this process
-        short k_local = rank*seg_size>>k;
-        //buf 1 has !k_local and l_local
+        //buf 1 has !k_local and l_local - происходит обмен c процессом, соседним по l (имеет различный k)
         MPI_Sendrecv(buf0, seg_size, MPI_DOUBLE_COMPLEX, rank1_change, 0, buf1, seg_size, //close process by k
                      MPI_DOUBLE_COMPLEX,
                      rank1_change, 0,
                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        //buf 2 has k_local and !l_local
+        //buf 2 has k_local and !l_local - происходит обмен с процессом, соседним по k (имеет различный l)
         MPI_Sendrecv(buf0, seg_size, MPI_DOUBLE_COMPLEX, rank2_change, 0, buf2, seg_size, //close process by l
                      MPI_DOUBLE_COMPLEX,
                      rank2_change, 0,
                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        //buf 3 has !k_local and !l_local
+        //buf 3 has !k_local and !l_local - происходит обмен с противоположным процессом (имеет различные k и l)
         MPI_Sendrecv(buf0, seg_size, MPI_DOUBLE_COMPLEX, rank3_change, 0, buf3, seg_size, //opposite process
                      MPI_DOUBLE_COMPLEX,
                      rank3_change, 0,
