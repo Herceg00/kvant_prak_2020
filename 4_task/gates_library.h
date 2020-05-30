@@ -8,6 +8,7 @@
 using namespace std;
 typedef complex<double> complexd;
 
+
 void
 OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned int k, complexd *recv_zone, int rank,
                   int size) {
@@ -16,7 +17,6 @@ OneQubitEvolution(complexd *buf_zone, complexd U[2][2], unsigned int n, unsigned
     unsigned first_index = rank * seg_size;
     unsigned rank_change = first_index ^(1u << (k - 1));
     rank_change /= seg_size;
-
     //printf("RANK %d has a change-neighbor %d\n", rank, rank_change);
     if (rank != rank_change) {
         MPI_Sendrecv(buf_zone, seg_size, MPI_DOUBLE_COMPLEX, rank_change, 0, recv_zone, seg_size, MPI_DOUBLE_COMPLEX,
@@ -70,7 +70,8 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
     rank2_change /= seg_size;
     rank3_change /= seg_size;
 
-    if (rank == rank3_change) { //The case when we don't need to change data - ранк противоположного процесса равен собственному
+    if (rank ==
+        rank3_change) { //The case when we don't need to change data - ранк противоположного процесса равен собственному
 #pragma omp parallel shared(recv_zone, buf_zone, U)
         {
 #pragma omp for schedule(static)
@@ -108,7 +109,8 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
             }
         }
 
-    } else if ((rank == rank1_change) || (rank == rank2_change)) { //The case when one array should be get from other process
+    } else if ((rank == rank1_change) ||
+               (rank == rank2_change)) { //The case when one array should be get from other process
         if (k > l) { //Обмениваемся с процессом, соседним по l (l совпадает)
             MPI_Sendrecv(buf0, seg_size, MPI_DOUBLE_COMPLEX, rank1_change, 0, buf1, seg_size, MPI_DOUBLE_COMPLEX,
                          rank1_change, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -186,10 +188,7 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
 #pragma omp parallel shared(recv_zone, buf_zone, U)
         {
 #pragma omp for schedule(static)
-            for (
-                    std::size_t i = 0;
-                    i < seg_size;
-                    i++) {
+            for (std::size_t i = 0; i < seg_size; i++) {
                 char k_bit = (i >> k) & 1;
                 char l_bit = (i >> l) & 1;
                 if ((!k_bit) && (!l_bit)) { //00
@@ -209,11 +208,11 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
     }
 }
 
-void NOT(unsigned k, complexd *buf0, int rank, int size, unsigned n){
+void NOT(unsigned k, complexd *buf0, int rank, int size, unsigned n) {
     complexd *buf1;
     unsigned N = 1u << n;
     unsigned seg_size = N / size;
-    if((1u<<k > seg_size)) { //нужно 3 обмена
+    if ((1u << k > seg_size)) { //нужен обмен
         buf1 = new complexd[seg_size];
     }
     complexd U[2][2];
@@ -221,39 +220,39 @@ void NOT(unsigned k, complexd *buf0, int rank, int size, unsigned n){
     U[1][1] = 0;
     U[0][1] = 1;
     U[1][0] = 1;
-    OneQubitEvolution(buf0,U,n,k,buf1,rank,size);
+    OneQubitEvolution(buf0, U, n, k, buf1, rank, size);
 }
 
-void ROT(unsigned k, complexd *buf0, int rank, int size, unsigned n,double thetta){
+void ROT(unsigned k, complexd *buf0, int rank, int size, unsigned n, double thetta) {
     complexd *buf1;
     unsigned N = 1u << n;
     unsigned seg_size = N / size;
-    if((1u<<k > seg_size)) { //нужно 3 обмена
+    if ((1u << k > seg_size)) { //нужен обмен
         buf1 = new complexd[seg_size];
     }
-    complexd a(0.0,1.0);
+    complexd a(0.0, 1.0);
     complexd U[2][2];
     U[0][0] = 1;
-    U[1][1] = exp(a.imag()*thetta);
+    U[1][1] = exp(a.imag() * thetta);
     U[0][1] = 0;
     U[1][0] = 0;
-    OneQubitEvolution(buf0,U,n,k,buf1,rank,size);
+    OneQubitEvolution(buf0, U, n, k, buf1, rank, size);
 }
 
-void CNOT(unsigned k, unsigned l,complexd *buf0, int rank, int size, unsigned n){
+void CNOT(unsigned k, unsigned l, complexd *buf0, int rank, int size, unsigned n) {
     complexd *buf1, *buf2, *buf3;
     unsigned N = 1u << n;
     unsigned seg_size = N / size;
-    if((1u<<l > seg_size)&&(1u<<k > seg_size)) { //нужно 3 обмена
+    if ((1u << l > seg_size) && (1u << k > seg_size)) { //нужно 3 обмена
         buf1 = new complexd[seg_size];
         buf2 = new complexd[seg_size];
         buf3 = new complexd[seg_size];
-    } else if ((1u<<l > seg_size)||(1u<<k > seg_size)){ //нужен 1 обмен
+    } else if ((1u << l > seg_size) || (1u << k > seg_size)) { //нужен 1 обмен
         buf1 = new complexd[seg_size];
     }
     complexd U[4][4];
-    for(short i = 0;i<4;i++){
-        for(short j = 0;i<4;i++){
+    for (short i = 0; i < 4; i++) {
+        for (short j = 0; i < 4; i++) {
             U[i][j] = 0;
         }
     }
@@ -261,32 +260,71 @@ void CNOT(unsigned k, unsigned l,complexd *buf0, int rank, int size, unsigned n)
     U[1][1] = 1;
     U[2][3] = 1;
     U[3][2] = 1;
-    TwoQubitEvolution(buf0,buf1,buf2,buf3,U,n,k,l,rank,size);
+    TwoQubitEvolution(buf0, buf1, buf2, buf3, U, n, k, l, rank, size);
 }
 
-void CROT(unsigned k, unsigned l,complexd *buf0, int rank, int size, unsigned n, double thetta){
+void CROT(unsigned k, unsigned l, complexd *buf0, int rank, int size, unsigned n, double thetta) {
     complexd *buf1, *buf2, *buf3;
     unsigned N = 1u << n;
     unsigned seg_size = N / size;
-    if((1u<<l > seg_size)&&(1u<<k > seg_size)) { //нужно 3 обмена
+    if ((1u << l > seg_size) && (1u << k > seg_size)) { //нужно 3 обмена
         buf1 = new complexd[seg_size];
         buf2 = new complexd[seg_size];
         buf3 = new complexd[seg_size];
-    } else if ((1u<<l > seg_size)||(1u<<k > seg_size)){ //нужен 1 обмен
+    } else if ((1u << l > seg_size) || (1u << k > seg_size)) { //нужен 1 обмен
         buf1 = new complexd[seg_size];
     }
     complexd U[4][4];
-    for(short i = 0;i<4;i++){
-        for(short j = 0;i<4;i++){
+    for (short i = 0; i < 4; i++) {
+        for (short j = 0; i < 4; i++) {
             U[i][j] = 0;
         }
     }
-    complexd a(0.0,1.0);
+    complexd a(0.0, 1.0);
     U[0][0] = 1;
     U[1][1] = 1;
-    U[2][3] = exp(a.imag()*thetta);
+    U[2][3] = exp(a.imag() * thetta);
     U[3][2] = 1;
-    TwoQubitEvolution(buf0,buf1,buf2,buf3,U,n,k,l,rank,size);
+    TwoQubitEvolution(buf0, buf1, buf2, buf3, U, n, k, l, rank, size);
+}
+
+std::size_t difference(complexd *ideal, complexd *result, unsigned long long seg_size, int rank) {
+    std::size_t error_position = 0;
+#pragma omp parallel shared(ideal, count, error_position)
+    {
+#pragma omp for schedule(static)
+        for (std::size_t i = 0; i < seg_size; i++) {
+            if (ideal[i] != result[i]) {
+                error_position = i + seg_size * rank;
+            }
+        }
+    }
+    return error_position; //Last error position will be fixed
+}
+
+//blackbox is tuned for CROT gate
+std::size_t blackbox(complexd *ideal, complexd U[4][4], unsigned n, unsigned k, unsigned l, unsigned long long seg_size, int rank, int size) {
+    complexd *buf0, *buf1, *buf2, *buf3;
+    if ((1u << l > seg_size) && (1u << k > seg_size)) { //нужно 3 обмена
+        buf1 = new complexd[seg_size];
+        buf2 = new complexd[seg_size];
+        buf3 = new complexd[seg_size];
+    } else if ((1u << l > seg_size) || (1u << k > seg_size)) { //нужен 1 обмен
+        buf1 = new complexd[seg_size];
+    }
+#pragma omp parallel shared(ideal, count, error_position)
+    {
+#pragma omp for schedule(static)
+        for (std::size_t i = 0; i < seg_size; i++) {
+            buf0[i] = ideal[i];
+        }
+    }
+    TwoQubitEvolution(buf0, buf1, buf2, buf3, U, n, k, l, rank, size);
+    complexd b(1.0, 0.0);
+    U[3][3] = b / U[3][3];
+    TwoQubitEvolution(buf0, buf1, buf2, buf3, U, n, k, l, rank, size);
+    size_t position = difference(ideal, buf0, seg_size, rank);
+    return position;
 }
 
 
