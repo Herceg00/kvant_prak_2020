@@ -70,11 +70,10 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
     rank1_change /= seg_size;
     rank2_change /= seg_size;
     rank3_change /= seg_size;
-    std::cout<<"process of rank "<<rank<<" has "<<rank1_change<<" , "<<rank2_change<<" , "<<rank3_change<<endl;
+    //std::cout<<"process of rank "<<rank<<" has "<<rank1_change<<" , "<<rank2_change<<" , "<<rank3_change<<endl;
 
 
-    if (rank ==
-        rank3_change) { //The case when we don't need to change data - ранк противоположного процесса равен собственному
+    if (rank == rank3_change) { //Ранк противоположного процесса равен собственному
 #pragma omp parallel shared(buf0, U)
         {
 #pragma omp for schedule(static)
@@ -84,34 +83,38 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
                 //cout<<"RANK: "<<rank<<" element "<<i<<" bits: "<<k_bit<<" "<<l_bit<<endl;
                 if ((!k_bit) && (!l_bit)) //00
                 {
-                    cout<<i<<" is for 00";
+                    //cout<<i<<" is for 00"<<endl;
                     size_t a = i | (1u << (k - 1));//01
                     size_t b = i | (1u << (l - 1));//10
                     size_t c = b | (1u << (k - 1));//11
+                    //cout<<"i is "<<i<<" a: "<<a<<" b: "<<b<<" c: "<<c<<endl;
                     buf0[i] = U[0][0] * buf0[i] + U[1][0] * buf0[a] + U[2][0] * buf0[b] + U[3][0] * buf0[c];
                 }
                 if ((!k_bit) && (l_bit)) //01
                 {
-                    cout<<i<<" is for 01";
+                    //cout<<i<<" is for 01"<<endl;
                     size_t a = i ^(1u << (l - 1));//00
                     size_t b = a | (1u << (k - 1));//10
                     size_t c = i | (1u << (k - 1));//11
+                    //cout<<"i is "<<i<<" a: "<<a<<" b: "<<b<<" c: "<<c<<endl;
                     buf0[i] = U[0][1] * buf0[a] + U[1][1] * buf0[i] + U[2][1] * buf0[b] + U[3][1] * buf0[c];
                 }
                 if ((k_bit) && (!l_bit)) //10
                 {
-                    cout<<i<<" is for 10";
+                    //cout<<i<<" is for 10"<<endl;
                     size_t a = i ^(1u << (k - 1));//00
                     size_t b = a | (1u << (l - 1));//01
                     size_t c = i | (1u << (l - 1));//11
+                    //cout<<"i is "<<i<<" a: "<<a<<" b: "<<b<<" c: "<<c<<endl;
                     buf0[i] = U[0][2] * buf0[a] + U[1][2] * buf0[b] + U[2][2] * buf0[i] + U[3][2] * buf0[c];
                 }
                 if ((k_bit) && (l_bit)) //11
                 {
-                    cout<<i<<" is for 11";
+                    //cout<<i<<" is for 11"<<endl;
                     size_t a = i ^((1u << (k - 1)) | (1u << (l - 1)));//00
                     size_t b = a | (1u << (l - 1));//01
                     size_t c = a | (1u << (k - 1));//10
+                    //cout<<"i is "<<i<<" a: "<<a<<" b: "<<b<<" c: "<<c<<endl;
                     buf0[i] = U[0][3] * buf0[a] + U[1][3] * buf0[b] + U[2][3] * buf0[c] + U[3][3] * buf0[i];
                 }
             }
@@ -130,45 +133,50 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
         {
 #pragma omp for schedule(static)
             for (std::size_t i = 0; i < seg_size; i++) {
-                char l_bit = (i >> (l-1)) & 1u;
-                char k_bit = (i >> (k-1)) & 1u;
+                unsigned l_bit = ((i + first_index) >> (l-1)) & 1u;
+                unsigned k_bit = ((i + first_index) >> (k-1)) & 1u;
+                //cout<<"RANK: "<<rank<<" element "<<i<<" bits: "<<k_bit<<" "<<l_bit<<endl;
                 if ((!k_bit) && (!l_bit)) { //00
                     if (k > l) {
-                        char l_pair = i | (1 << (l - 1));
+                        unsigned l_pair = i | (1 << (l - 1));
+                        //cout<<" i "<<i<<" l pair "<<l_pair<<endl;
                         buf0[i] =
                                 U[0][0] * buf0[i] + U[1][0] * buf0[l_pair] + U[2][0] * buf1[i] + U[3][0] * buf1[l_pair];
                     } else {
-                        char k_pair = i | (1 << (k - 1));
+                        unsigned k_pair = i | (1 << (k - 1));
                         buf0[i] =
                                 U[0][0] * buf0[i] + U[1][0] * buf1[i] + U[2][0] * buf0[k_pair] + U[3][0] * buf1[k_pair];
                     }
                 } else if ((!k_bit) && (l_bit)) { //01
                     if (k > l) {
-                        char l_pair = i ^(1 << (l - 1));
+                        unsigned l_pair = i ^(1 << (l - 1));
+                        //cout<<" i "<<i<<" l pair "<<l_pair<<endl;
                         buf0[i] =
                                 U[0][1] * buf0[l_pair] + U[1][1] * buf0[i] + U[2][1] * buf1[l_pair] + U[3][1] * buf1[i];
                     } else {
-                        char k_pair = i | (1 << (k - 1));
+                        unsigned k_pair = i | (1 << (k - 1));
                         buf0[i] =
                                 U[0][1] * buf1[i] + U[1][1] * buf0[i] + U[2][1] * buf1[k_pair] + U[3][1] * buf0[k_pair];
                     }
                 } else if ((k_bit) && (!l_bit)) { //10
                     if (k > l) {
-                        char l_pair = i | (1 << (l - 1));
+                        unsigned l_pair = i | (1 << (l - 1));
+                        //cout<<rank<<" is rank and i "<<i<<" l pair "<<l_pair<<endl;
                         buf0[i] =
                                 U[0][2] * buf1[i] + U[1][2] * buf1[l_pair] + U[2][2] * buf0[i] + U[3][2] * buf0[l_pair];
                     } else {
-                        char k_pair = i ^(1 << (k - 1));
+                        unsigned k_pair = i ^(1 << (k - 1));
                         buf0[i] =
                                 U[0][2] * buf0[k_pair] + U[1][2] * buf1[k_pair] + U[2][2] * buf0[i] + U[3][2] * buf1[i];
                     }
                 } else { //11
                     if (k > l) {
-                        char l_pair = i ^(1 << (l - 1));
+                        unsigned l_pair = i ^(1 << (l - 1));
+                        cout<<rank<<" is rank and i "<<i<<" l pair "<<l_pair<<endl;
                         buf0[i] =
                                 U[0][3] * buf1[l_pair] + U[1][3] * buf1[i] + U[2][3] * buf0[l_pair] + U[3][3] * buf0[i];
                     } else {
-                        char k_pair = i ^(1 << (k - 1));
+                        unsigned k_pair = i ^(1 << (k - 1));
                         buf0[i] =
                                 U[0][3] * buf1[k_pair] + U[1][3] * buf0[k_pair] + U[2][3] * buf1[i] + U[3][3] * buf0[i];
                     }
@@ -197,8 +205,8 @@ void TwoQubitEvolution(complexd *buf0, complexd *buf1, complexd *buf2, complexd 
         {
 #pragma omp for schedule(static)
             for (std::size_t i = 0; i < seg_size; i++) {
-                char k_bit = (i >> (k-1)) & 1u;
-                char l_bit = (i >> (l-1)) & 1u;
+                unsigned l_bit = ((i + first_index) >> (l-1)) & 1u;
+                unsigned k_bit = ((i + first_index) >> (k-1)) & 1u;
                 if ((!k_bit) && (!l_bit)) { //00
                     buf0[i] = U[0][0] * buf0[i] + U[1][0] * buf2[i] + U[2][0] * buf1[i] + U[3][0] * buf3[i];
                 }
