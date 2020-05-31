@@ -283,8 +283,8 @@ void CROT(unsigned k, unsigned l, complexd *buf0, int rank, int size, unsigned n
     complexd a(0.0, 1.0);
     U[0][0] = 1;
     U[1][1] = 1;
-    U[2][3] = exp(a.imag() * thetta);
-    U[3][2] = 1;
+    U[3][3] = exp(a.imag() * thetta);
+    U[2][2] = 1;
     TwoQubitEvolution(buf0, buf1, buf2, buf3, U, n, k, l, rank, size);
 }
 
